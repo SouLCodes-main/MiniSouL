@@ -4,6 +4,7 @@ from discord.ext import commands
 import logging
 from dotenv import load_dotenv
 from datetime import timedelta
+from typing import Optional
 
 load_dotenv()
 token = os.getenv("DISCORD_TOKEN")
@@ -20,7 +21,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 
-bot = commands.Bot(command_prefix='?', intents=intents)
+bot = commands.Bot(command_prefix='ms!', intents=intents)
 
 @bot.event
 async def on_ready():
@@ -162,31 +163,81 @@ async def unban(ctx, *, member):
 
 @bot.command()
 @commands.has_permissions(moderate_members=True)
-async def timeout(ctx, member: discord.Member, duration: int = 15, *, reason=None):
-    """Timeout a member for the specified duration in minutes"""
+async def timeout(ctx, member: discord.Member, duration: str, *, reason=None):
+    """Timeout a member for the specified duration
+    Format: ms!timeout @user <duration> <reason>
+    Duration examples: 15m, 2h, 1d, 30 (defaults to minutes)
+    """
     if reason is None:
         reason = "No reason provided"
     
     try:
+        # Parse duration
+        duration_lower = duration.lower().strip()
+        timeout_minutes = 15  # default
+        
+        if duration_lower.endswith('m'):
+            # Minutes
+            timeout_minutes = int(duration_lower[:-1])
+        elif duration_lower.endswith('h'):
+            # Hours
+            timeout_minutes = int(duration_lower[:-1]) * 60
+        elif duration_lower.endswith('d'):
+            # Days
+            timeout_minutes = int(duration_lower[:-1]) * 1440  # 24 * 60
+        else:
+            # Default to minutes if no unit specified
+            try:
+                timeout_minutes = int(duration_lower)
+            except ValueError:
+                await ctx.send("❌ Invalid duration format. Use: `15m`, `2h`, `1d`, or `30` (minutes)")
+                return
+        
+        # Validate duration limits
+        if timeout_minutes < 1:
+            await ctx.send("❌ Duration must be at least 1 minute.")
+            return
+        elif timeout_minutes > 40320:  # 28 days in minutes
+            await ctx.send("❌ Duration cannot exceed 28 days.")
+            return
+        
         # Check if the user can be timed out
         if member.guild_permissions.administrator or member == ctx.guild.owner:
             await ctx.send("❌ Cannot timeout administrators or server owners.")
             return
         
         # Apply timeout
-        timeout_duration = timedelta(minutes=duration)
+        timeout_duration = timedelta(minutes=timeout_minutes)
         await member.timeout(timeout_duration, reason=reason)
+        
+        # Format duration for display
+        if timeout_minutes < 60:
+            duration_display = f"{timeout_minutes} minute{'s' if timeout_minutes != 1 else ''}"
+        elif timeout_minutes < 1440:
+            hours = timeout_minutes // 60
+            minutes = timeout_minutes % 60
+            duration_display = f"{hours} hour{'s' if hours != 1 else ''}"
+            if minutes > 0:
+                duration_display += f" {minutes} minute{'s' if minutes != 1 else ''}"
+        else:
+            days = timeout_minutes // 1440
+            hours = (timeout_minutes % 1440) // 60
+            duration_display = f"{days} day{'s' if days != 1 else ''}"
+            if hours > 0:
+                duration_display += f" {hours} hour{'s' if hours != 1 else ''}"
         
         # Create embed
         embed = discord.Embed(title="⏰ User Timed Out", color=discord.Color.orange())
         embed.add_field(name="User", value=f"{member.mention}", inline=False)
-        embed.add_field(name="Duration", value=f"{duration} minutes", inline=False)
+        embed.add_field(name="Duration", value=duration_display, inline=False)
         embed.add_field(name="Reason", value=reason, inline=False)
         embed.add_field(name="By", value=f"{ctx.author.mention}", inline=False)
         embed.set_footer(text="Timeout executed successfully.")
         
         await ctx.send(embed=embed)
         
+    except ValueError:
+        await ctx.send("❌ Invalid duration format. Use: `15m`, `2h`, `1d`, or `30` (minutes)")
     except discord.Forbidden:
         await ctx.send("❌ I don't have permission to timeout this user.")
     except discord.HTTPException as e:
@@ -199,19 +250,21 @@ async def timeout_error(ctx, error):
     if isinstance(error, commands.MissingPermissions):
         await ctx.send("❌ You don't have permission to timeout members.")
     elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send("❌ Please mention a user to timeout. Example: `?timeout @user 15 reason`")
+        await ctx.send("❌ Please mention a user and specify duration. Example: `ms!timeout @user 15m reason`")
     elif isinstance(error, commands.BadArgument):
-        await ctx.send("❌ Couldn't find that user or invalid duration.")
+        await ctx.send("❌ Couldn't find that user.")
+    else:
+        await ctx.send("❌ An error occurred while trying to timeout the user.")
 
 @bot.command()
-async def avatar(ctx, member: discord.Member = None):
+async def avatar(ctx, member: Optional[discord.Member] = None):
     member = member or ctx.author
     embed = discord.Embed(title=f"{member.name}'s Avatar", color=discord.Color.blue())
     embed.set_image(url=member.display_avatar.url)
     await ctx.send(embed=embed)
 
 @bot.command()
-async def removetimeout(ctx, member: discord.Member = None):
+async def removetimeout(ctx, member: Optional[discord.Member] = None):
     member = member or ctx.author
     await member.timeout(None)
     embed = discord.Embed(title="✅ Timeout Removed", color=discord.Color.green())
@@ -221,6 +274,67 @@ async def removetimeout(ctx, member: discord.Member = None):
 
     await ctx.send(embed=embed)
 
+@bot.command()
+async def serverinfo(ctx):
+    """Display information about the server"""
+    guild = ctx.guild
+    
+    # Get member counts
+    total_members = guild.member_count
+    bot_count = len([member for member in guild.members if member.bot])
+    human_count = total_members - bot_count
+    
+    # Get channel counts
+    text_channels = len(guild.text_channels)
+    voice_channels = len(guild.voice_channels)
+    categories = len(guild.categories)
+    
+    # Get role count
+    role_count = len(guild.roles)
+    
+    # Get boost info
+    boost_level = guild.premium_tier
+    boost_count = guild.premium_subscription_count
+    
+    # Create embed
+    embed = discord.Embed(title=f"📊 {guild.name} Server Information", color=discord.Color.blue())
+    
+    # Server basic info
+    embed.add_field(name="🆔 Server ID", value=guild.id, inline=True)
+    embed.add_field(name="👑 Owner", value=guild.owner.mention, inline=True)
+    embed.add_field(name="📅 Created", value=guild.created_at.strftime("%B %d, %Y"), inline=True)
+    
+    # Member info
+    embed.add_field(name="👥 Total Members", value=f"{total_members:,}", inline=True)
+    embed.add_field(name="👤 Humans", value=f"{human_count:,}", inline=True)
+    embed.add_field(name="🤖 Bots", value=f"{bot_count:,}", inline=True)
+    
+    # Channel info
+    embed.add_field(name="💬 Text Channels", value=text_channels, inline=True)
+    embed.add_field(name="🔊 Voice Channels", value=voice_channels, inline=True)
+    embed.add_field(name="📁 Categories", value=categories, inline=True)
+    
+    # Other info
+    embed.add_field(name="🎭 Roles", value=role_count, inline=True)
+    embed.add_field(name="🚀 Boost Level", value=f"Level {boost_level}", inline=True)
+    embed.add_field(name="⭐ Boosts", value=boost_count, inline=True)
+    
+    # Server features
+    if guild.features:
+        features = [feature.replace('_', ' ').title() for feature in guild.features]
+        embed.add_field(name="✨ Features", value=", ".join(features[:5]), inline=False)
+    
+    # Server description
+    if guild.description:
+        embed.add_field(name="📝 Description", value=guild.description[:1024], inline=False)
+    
+    # Set thumbnail
+    if guild.icon:
+        embed.set_thumbnail(url=guild.icon.url)
+    
+    embed.set_footer(text=f"Requested by {ctx.author.name}")
+    
+    await ctx.send(embed=embed)
 
 @bot.command()
 async def botperms(ctx):
