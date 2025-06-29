@@ -15,7 +15,7 @@ if not token:
 
 handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
 
-
+# Intents
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
@@ -30,7 +30,7 @@ async def on_ready():
 async def on_member_join(member):
     await member.send(f"Welcome to the server, {member.name}! We're glad to have you here.")
         
-       
+# Bad language detection     
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
@@ -103,8 +103,6 @@ async def kick(ctx, member: discord.Member, *, reason=None):
     # Default reason
     if reason is None:
         reason = "No reason provided"
-
-    
 
     # Create an embed to show the kick information
     embed = discord.Embed(title=f"{member.mention} Kicked", color=discord.Color.blue())
@@ -206,7 +204,26 @@ async def timeout_error(ctx, error):
         await ctx.send("❌ Couldn't find that user or invalid duration.")
 
 @bot.command()
-async def test(ctx):
+async def avatar(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    embed = discord.Embed(title=f"{member.name}'s Avatar", color=discord.Color.blue())
+    embed.set_image(url=member.display_avatar.url)
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def removetimeout(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    await member.timeout(None)
+    embed = discord.Embed(title="✅ Timeout Removed", color=discord.Color.green())
+    embed.add_field(name="User", value=f"{member.mention} timeout has been removed.", inline=False)
+    embed.add_field(name="By", value=f"{ctx.author.mention}", inline=False)
+    embed.set_footer(text="Timeout removed successfully.")
+
+    await ctx.send(embed=embed)
+
+
+@bot.command()
+async def botperms(ctx):
     """Test command to check bot permissions and functionality"""
     embed = discord.Embed(title="🤖 Bot Status Check", color=discord.Color.blue())
     
@@ -231,12 +248,7 @@ async def test(ctx):
     
     await ctx.send(embed=embed)
 
-@bot.command()
-async def testbadword(ctx):
-    """Test the bad word detection (will trigger timeout)"""
-    await ctx.send("Testing bad word detection...")
-    # This will trigger the on_message event
-    await ctx.send("fuck")
+
 
 bot.run(token, log_handler=handler, log_level=logging.DEBUG)
 
