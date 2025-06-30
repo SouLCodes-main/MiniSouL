@@ -29,8 +29,16 @@ async def on_ready():
 
 @bot.event
 async def on_member_join(member):
-    await member.send(f"Welcome to the server, {member.name}! We're glad to have you here.")
-        
+    embed = discord.Embed(title='Welcome to the server!', description=f'{member.mention} has joined the server!', color=discord.Color.blue())
+    embed.set_thumbnail(url=member.display_avatar.url)
+    embed.add_field(name='Please read the rules and have a great stay in our community', value='', inline=False)
+
+    await member.send(embed=embed)
+    channel = member.guild.get_channel(1329406854102519870)
+    if channel:
+        await channel.send(embed=embed)
+
+
 # Bad language detection     
 @bot.event
 async def on_message(message):
