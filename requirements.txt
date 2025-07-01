@@ -1,3 +1,8 @@
+<<<<<<< HEAD
 discord.py>=2.0.0
 python-dotenv>=0.19.0
 flask>=2.0.0 
+=======
+discord.py
+python-dotenv
+>>>>>>> 1a4d2b7454b3071ae8a54ada31a8f6cf385b54b2
