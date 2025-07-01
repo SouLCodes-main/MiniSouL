@@ -5,14 +5,27 @@ import logging
 from dotenv import load_dotenv
 from datetime import timedelta
 from typing import Optional
+from flask import Flask
+import threading
 
 load_dotenv()
 token = os.getenv("DISCORD_TOKEN")
+port = int(os.getenv("PORT", 8080))
 
 # Check if token exists
 if not token:
     print("Error: DISCORD_TOKEN not found in environment variables!")
     exit(1)
+
+# Flask app setup
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=port)
 
 handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
 
@@ -372,6 +385,12 @@ async def botperms(ctx):
 
 
 
+# Start Flask server in a separate thread
+flask_thread = threading.Thread(target=run_flask, daemon=True)
+flask_thread.start()
+print(f"Flask server started on port {port}")
+
+# Run the Discord bot
 bot.run(token, log_handler=handler, log_level=logging.DEBUG)
 
 
